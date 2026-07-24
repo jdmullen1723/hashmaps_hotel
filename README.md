@@ -24,6 +24,10 @@ I will use a single Hashfunction for all the different hashmap cases to simplify
 
 Notes: 
 - Data uses passenger info from titanic as the situation. Passenger ID in dataset is created by us, not a real value from existing datset. It's just in order that the passengers are listed. The rest of the entries are scraped from the following datset: https://www.openml.org/d/40945
-- 
+- I am learning C in this project, so some inline comments may be obvious to others or unnusual
+- Guest name limited to 64 bytes --> so 63 usable characters and one terminator byte. It's one byte per letter. 
+- There is a datafile with the whole guest list, and a single loader function which loads this file into an array str
+
 
 ##Direct Addressing
+- Guests mapped by Guest Number, numbers 1 - 1000. Guest 1 goes to index 0, guest 2 to index 1 etc

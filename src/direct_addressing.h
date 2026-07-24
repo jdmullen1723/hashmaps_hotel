@@ -6,6 +6,7 @@
 //for direct addressing the CAPACITY is fixed at the number of guests. CAPACITY = number of guests = 1000
 #define CAPACITY 1000 
 
+//We define these functions here, but their bodies are written in direct_addressing.c
 void insert_guest(int guest_number, const char *name);
 Guest *lookup_guest(int guest_number);
 
