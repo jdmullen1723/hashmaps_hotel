@@ -1,31 +1,57 @@
 #include <stdio.h> //For printf command
+#include <string.h>
 #include "src/direct_addressing.h"
+#include <stdlib.h>
 
 int main(void) {
-    //Inserts the first two guests manually as a trial
-    insert_guest(1, "Pamela James"); 
-    insert_guest(2, "Debra Thompson");
+    /*
+    This paragraph opens the data file "hotel_california.psv" in reading mode "r".
+    The file is NULL checked, then declared toi have opened succesfully is not NULL.
+    */
+    FILE *file = fopen("data/hotel_california.psv", "r"); 
+    if (file == NULL) {
+        printf("Could not open the data file.\n");
+        return 1;
+    }
+    printf("File opened successfully.\n");
 
-    Guest *g_1 = lookup_guest(1);
-    if (g_1 != NULL) {
-        printf("Guest %d: %s\n", g_1->guest_number, g_1->name);
-    } else {
-        printf("Guest 1 not found\n");
+    /*
+    This array "line" is the space allocated for the fget functions
+    to store their strings as they are called in the loop.
+    */
+    char line[256]; //declares an array of 256 characters named "line"
+
+    //Reads and discards the header (guest_number|name|phone)
+    fgets(line, sizeof(line), file);
+
+    int count = 0;
+
+    /*
+    fgets reads through the file while moving the cursor character by charcter. 
+    It stops when it hits a newline \n.
+    It stores the line is has just read as "line", a string
+    This while loop calls fgets on every line and tokenizes each line by value.
+    */
+    while (fgets(line, sizeof(line), file) != NULL) {
+        //Removes the newline \n at the end of the line so the data reads as one clean line
+        //If youz don't do this first, reading the datafile with fgets will reveal a \n every line
+        line[strcspn(line, "\n")] = '\0';
+
+        //strtok splits the lines in the datafile into smaller strings.
+        //The marker for where to split is chosen as "|"
+        char *number_str = strtok(line, "|");
+        //The NULL below means carry on tokenizing from the line where you left off
+        char *name = strtok(NULL, "|"); 
+        //char *phone = strtok(NULL, "|"); --> no need to parse, we don't use it yet
+
+        int guest_number = atoi(number_str); //Atoi turns the string of number_str into the integer guest_number, as insert guest requires int as an input
+        insert_guest(guest_number, name); //Inserts the guest at the index corresponding to their address
+        count++; //Increments the count
     }
 
-    Guest *g_2 = lookup_guest(2);
-    if (g_2 != NULL) {
-        printf("Guest %d: %s\n", g_2->guest_number, g_2->name);
-    } else {
-        printf("Guest 2 not found\n");
-    }
+    fclose(file);
 
-    Guest *missing = lookup_guest(500);
-    if (missing != NULL) {
-        printf("Guest %d: %s\n", missing->guest_number, missing->name);
-    } else {
-        printf("Guest 500 not found\n");
-    }
+    printf("Loaded %d guests.\n", count); //See count to verify all guests loaded
 
     return 0;
 }
