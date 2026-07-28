@@ -42,8 +42,7 @@ int main(void) {
         char *number_str = strtok(line, "|");
         //The NULL below means carry on tokenizing from the line where you left off
         char *name = strtok(NULL, "|"); 
-        //char *phone = strtok(NULL, "|"); --> no need to parse, we don't use it yet
-
+        
         int guest_number = atoi(number_str); //Atoi turns the string of number_str into the integer guest_number, as insert guest requires int as an input
         insert_guest(guest_number, name); //Inserts the guest at the index corresponding to their address
         count++; //Increments the count
@@ -52,6 +51,14 @@ int main(void) {
     fclose(file);
 
     printf("Loaded %d guests.\n", count); //See count to verify all guests loaded
+
+    Guest *g = lookup_guest(1000);
+    if (g != NULL) printf("Found: %d = %s\n", g->guest_number, g->name);
+    else printf("Guest 1000 not found \n");
+
+    Guest *missing = lookup_guest(1001);
+    if (missing != NULL) printf("FOund: %d = %s\n", missing->guest_number, missing->name);
+    else printf("Guest 1001 not found");
 
     return 0;
 }
