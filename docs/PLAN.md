@@ -17,78 +17,74 @@ Priority order, from the goals discussion:
 4. **Educational for you later, and possibly others** — you like explaining
    things well; this repo should teach, not just work.
 
-**Decision: CLI-first, README-as-the-lesson.** All effort goes into the C core
-and a genuinely engaging terminal experience. A web layer is explicitly
-out of scope for v1 (see §11). The reasoning: a polished CLI + a README with
-real benchmark data is a strong, differentiated portfolio piece on its own,
-and every hour spent on a web frontend is an hour not spent on the C/hashmap
-fundamentals that are the actual point.
+**Decision: CLI-first, README-as-the-lesson.** All effort goes into the C core.
+A web layer is explicitly out of scope for v1 (see §11). The reasoning: a solid
+C core + a README with real benchmark data is a strong, differentiated portfolio
+piece on its own, and every hour spent on presentation polish is an hour not
+spent on the C/hashmap fundamentals that are the actual point.
+
+**Priority update (supersedes earlier "engaging terminal experience" framing):**
+the CLI is NOT an educational/visual lesson flow. `main`'s job is simply to
+**print a spec sheet** — a plain table of benchmark metrics, one row per
+(hashmap × hash-function) combination. No animations, no ANSI color, no
+narrated walkthrough, no per-insert visuals. The teaching lives entirely in the
+README; the CLI is a measurement tool that emits comparable numbers. Any
+"engaging visual CLI" work is dropped from v1 (see §8).
 
 ## 2. Dataset
 
-**File:** `data/titanic.psv` — pipe-delimited, 1,309 passenger rows + 1 header row.
+**File:** `data/hotel_california.psv` — pipe-delimited, 1,000 guest rows + 1 header row.
 
-**Source:** the full `titanic3` dataset (Vanderbilt Biostatistics — Frank Harrell
-Jr. & Thomas Cason, sourced from Encyclopedia Titanica research), not the
-smaller 891-row Kaggle ML-competition split. Pulled from
-`https://hbiostat.org/data/repo/titanic3.csv`, cross-referenced against
-`https://www.openml.org/d/40945`. `survived` is complete for all 1,309 rows —
-verified, zero missing.
+**Story — "Hotel California":** a hotel front desk. The hash function *is* the
+front desk — it takes a guest and computes their room (slot). Insert = check-in,
+lookup = find a guest, delete = check-out. A collision = two guests sent to the
+same room. This framing makes every hashmap concept physical: probing = walk
+down the hall to the next room; chaining = add a rollaway bed to an occupied
+room; tombstone = a "checked out, keep looking" marker; resizing = the hotel
+can't just add wings for free.
+
+**Source:** fabricated by us with a seeded generator (reproducible). This is
+synthetic data purpose-built to exercise the hashmap operations — *not* scraped.
+(An earlier version of this project used the real Titanic passenger dataset; we
+pivoted to a hotel because check-in/check-out gives a natural reason for
+deletion, tombstones, and grow/shrink resizing. An insert-only historical
+dataset like Titanic can't motivate those operations.)
 
 **Schema:**
 
 ```
-id|pclass|survived|name|sex|age|sibsp|parch|ticket|fare|cabin|embarked|boat|body|home_dest
+guest_number|name|phone
 ```
 
-| Column | Type | Missing | Notes |
-|---|---|---|---|
-| `id` | int | 0 | **synthesized by us** — row number 1–1309, not a real historical identifier |
-| `pclass` | int | 0 | 1st/2nd/3rd class |
-| `survived` | bool (0/1) | 0 | 1 = survived, 0 = died — verified against real Allison-family records |
-| `name` | string | 0 | left exactly as sourced — see naming note below |
-| `sex` | string | 0 | `male`/`female` |
-| `age` | float | 263 | ~20% missing, needs a null convention |
-| `sibsp` | int | 0 | siblings/spouses aboard |
-| `parch` | int | 0 | parents/children aboard |
-| `ticket` | string | 0 | shared by families/groups — multimap key candidate |
-| `fare` | float | 1 | |
-| `cabin` | string | 1014 | mostly blank — real historical gap, not a data error |
-| `embarked` | string | 2 | `S`/`C`/`Q` (Southampton/Cherbourg/Queenstown) + 2 blank |
-| `boat` | string | 823 | lifeboat number, filled only for survivors |
-| `body` | string | 1188 | recovery body number, filled only for identified recovered bodies |
-| `home_dest` | string | 564 | hometown/destination |
+| Column | Type | Notes |
+|---|---|---|
+| `guest_number` | int | 1–1000, arrival order. Dense sequential key — the ONLY column that makes direct addressing possible. Synthetic. |
+| `name` | string | fabricated from common first/last name pools. The string-key candidate (Phase 2 hashing). |
+| `phone` | string | 10-digit, no punctuation. A large, **sparse** numeric key — key range ~10^10 vs. 1000 entries, so it **cannot** be direct-addressed. Motivates real numeric hashing. |
 
 **Key decisions made:**
 
-- **`id` is synthetic**, not scraped — the source has no numeric identifier at
-  all. It exists purely so we have a clean numeric key to hash against.
-- **`name` is untouched**, including married women recorded under their
-  husband's formal name (e.g. `Andersson, Mrs. Anders Johan (Alfrida
-  Konstantia Brogren)`). Kept deliberately for the collision-testing value:
-  spouses produce near-identical key strings differing by only a couple of
-  characters, which is a good stress test for hash avalanche behavior.
+- **`guest_number` is the direct-addressing key**, dense 1–1000. Works only
+  because it's dense *and* the guest count is known up front — both assumptions
+  break for a real, still-operating hotel (that failure is the Phase 1
+  "why it breaks" lesson, and the bridge to real hashing).
+- **`name` contains 30 deliberate duplicate entries** (e.g. two different
+  "Anna Thompson"s) reintroduced on purpose, so "name alone isn't always a
+  unique key" is a real, testable case rather than contrived.
+- **`phone` is deliberately sparse.** Chosen over a credit-card number (which
+  would look like a data-breach dump in a public GitHub repo) but keeps the
+  same large-key-space property that makes direct addressing impossible and
+  hashing necessary.
 - **Pipe-delimited, not JSON** — avoids needing a real CSV/JSON parser in C
   before any hashmap code exists. Verified no field contains a literal `|`.
-- **Crew and non-boarding "phantom" passengers were investigated and
-  deliberately excluded** — see §11 for why.
-
-**Real collision material already in the data** (not contrived):
-
-- Two genuine duplicate names: `Connolly, Miss. Kate` (two different women,
-  ages 22 and 30) and `Kelly, Mr. James` (two different men, ages 34.5 and 44).
-- 134 distinct ticket numbers shared by 2–7 passengers (e.g. the Andersson
-  family, 7 people on ticket `347082`).
-- Surnames shared well beyond marriage: Andersson (9), Sage (7), Johnson (6),
-  Panula (6), Goodwin (6).
 
 ## 3. Vocabulary
 
 Canonical definitions — use these consistently in code comments, README, and
 the CLI's own output text.
 
-- **Key** — the lookup input (e.g. `id`, `name`, `ticket`).
-- **Value** — the data associated with the key (the rest of the passenger record).
+- **Key** — the lookup input (e.g. `guest_number`, `name`, `phone`).
+- **Value** — the data associated with the key (the rest of the guest record).
 - **Entry** — the stored `{key, value}` unit.
 - **Slot** — one location in the backing array (open addressing: holds one entry).
 - **Bucket** — one location in chaining (holds a list of entries).
@@ -103,8 +99,9 @@ the CLI's own output text.
 
 ## 4. Architecture
 
-**Entry struct** — one shared passenger record type in `src/common/`, used by
-every hashmap implementation regardless of collision strategy.
+**Guest struct** — one shared guest record type in `src/guest.h`, used by
+every hashmap implementation regardless of collision strategy. (Currently holds
+`guest_number` + `name`; `phone` gets added when a phase needs it.)
 
 **Hash function interface** — two signatures, since numeric and string keys
 are genuinely different inputs:
@@ -123,15 +120,20 @@ what makes "every hash function × every hashmap" possible without special-casin
 
 ```
 src/
-  common/       Entry struct, shared types
-  hashfuncs/    one file per hash function (numeric/ and string/ subfolders)
-  hashmaps/     one file per collision strategy
-  cli/          argument parsing, lesson-mode script, visual rendering
+  guest.h                    Guest struct, shared record type
+  direct_addressing.{c,h}    Phase 1 (done)
+  naive_hash.{c,h}           the broken modulo baseline (Phase 1→2 bridge)
+  <chaining, probing, ...>   one file per collision strategy
+hashfuncs/
+  number_hashfuncs/          one file per numeric hash function
+  string_hashfuncs/          one file per string hash function
+tests/                       one test file per technique (TDD)
 data/
-  titanic.psv
+  hotel_california.psv
 docs/
-  PLAN.md       this file
-README.md       the educational document (vocabulary, diagrams, real results)
+  PLAN.md                    this file
+main.c                       loads dataset, runs the matrix, prints spec sheet
+README.md                    the educational document (vocabulary, diagrams, real results)
 ```
 
 **Doc/code split convention:** conceptual explanations (why a technique works,
@@ -146,10 +148,10 @@ No duplicated explanations between the two.
 
 | # | Name | Idea | Phase |
 |---|---|---|---|
-| 1 | Direct addressing | `id - 1` — not really a hash; requires capacity == key range | 1 |
-| 2 | Modulo hashing | `id % capacity` — simplest true hash | 1 |
-| 3 | Multiplicative (Fibonacci) hashing | `(id * A) >> shift`, A derived from the golden ratio — better distribution than modulo when capacity isn't prime | 3 |
-| 4 | Integer bit-mixing | splitmix/Murmur-finalizer-style multiply-xor-shift chain — for keys that aren't naturally well distributed | 3 (stretch) |
+| 1 | Direct addressing | `guest_number - 1` — not really a hash; requires capacity == key range | 1 (done) |
+| 2 | Modulo hashing | `guest_number % capacity` — simplest true hash; naive version overwrites on collision (the "broken baseline") | 1→2 |
+| 3 | Multiplicative (Fibonacci) hashing | `(key * A) >> shift`, A derived from the golden ratio — better distribution than modulo when capacity isn't prime | 3 |
+| 4 | Integer bit-mixing | splitmix/Murmur-finalizer-style multiply-xor-shift chain — for keys that aren't naturally well distributed (e.g. sparse `phone`) | 3 (stretch) |
 
 ### String keys
 
@@ -179,43 +181,46 @@ so overflow wraparound is well-defined behavior, not UB.
 | 5 | Dynamic resizing | layered on top of (2)–(4): rehash when load factor crosses ~0.7 | 4 |
 | 6 | Robin Hood hashing | open addressing variant, evicts the entry closer to its ideal slot | 5 (stretch) |
 | 7 | Cuckoo hashing | two tables/hashes, evicting relocation, worst-case O(1) lookup | 5 (stretch) |
-| 8 | Perfect hashing | precomputed collision-free hash for the static 1,309-row dataset | 5 (stretch) |
+| 8 | Perfect hashing | precomputed collision-free hash for the static 1,000-row dataset | 5 (stretch) |
 
 ## 7. Keying Strategies (map vs. multimap)
 
 | Key | Type | Uniqueness | Structure |
 |---|---|---|---|
-| `id` | numeric | unique | map |
-| `name` | string | near-unique (2 real duplicate pairs) | map |
-| `ticket` | string | shared (134 tickets, up to 7 people) | multimap |
-| surname (parsed from `name`) | string | shared (up to 9 people) | multimap |
+| `guest_number` | numeric | unique, dense | map |
+| `name` | string | near-unique (30 deliberate duplicate entries) | map |
+| `phone` | numeric | unique but sparse | map |
+| surname (parsed from `name`) | string | shared (common surnames repeat across guests) | multimap |
 
-Build the map exercises first (phases 1–4), add the multimap exercises in
+Build the map exercises first (phases 1–4), add the multimap exercise in
 phase 5 by reusing chaining's bucket-list structure — a multimap is nearly
-free once chaining exists.
+free once chaining exists. Surname (parsed out of `name`) is the natural
+multimap key: many guests share a surname, so one key → a list of guests.
 
 ## 8. CLI Design
 
-Two entry points into the same underlying hashmap × hash-function matrix:
+**`main`'s only job: print a spec sheet.** Run every (hashmap × hash-function)
+combination against the full dataset and print one plain table — one row per
+combination, columns being the benchmark metrics from §9. That's it. No lesson
+flow, no animation, no color, no query/walkthrough modes. Example shape:
 
-**Default (`./main`, no args)** — a scripted lesson-flow walkthrough: runs
-each technique in build order against the full dataset, printing a short
-explanation and a live visual per stage, ending in a leaderboard comparing
-every combination run. Zero-knowledge-required — this is the "just run it"
-demo experience.
+```
+hashmap        hash        load   collisions  avg_probe  worst_probe  insert_ms  lookup_ms  bytes
+chaining       djb2        4.00   612         2.3        14           0.9        0.8        ...
+chaining       sum_chars   4.00   1840        5.1        41           1.2        1.4        ...
+linear_probe   djb2        0.70   —           3.8        22           1.1        0.9        ...
+double_hash    djb2        0.70   —           1.9        6            1.0        0.7        ...
+```
 
-**Flag-driven (`./main --map chaining --hash fnv1a --key ticket --multimap`)**
-— runs exactly one specified combination. This is the actual
-exploration/debugging tool used while building, and it's real CLI/argument-
-parsing practice in C.
+**Optional flag-driven single run** (`--map chaining --hash fnv1a --key name`)
+— runs one combination instead of the whole matrix. Nice-to-have for
+debugging while building, and real CLI/argument-parsing practice, but not
+required for v1. If it adds friction, skip it and just run the full matrix.
 
-**Visual elements** (terminal-native, ASCII/ANSI — not image graphs):
-
-- Live bucket-fill bars (`███░░░`) updating as inserts happen.
-- ANSI color flash on collision events.
-- Final leaderboard table: strategy, hash fn, avg probe, worst probe, time.
-- Query mode: look up one real passenger (e.g. Kate Connolly — a genuine
-  collision case) and print the actual probe sequence taken to find them.
+**Explicitly dropped from v1:** live bucket-fill bars, ANSI color/collision
+flashes, scripted narrated walkthrough, and the interactive probe-sequence
+query mode. These were the "engaging visual CLI" idea, now deprioritized —
+the README carries all teaching; the CLI only emits numbers.
 
 ## 9. Benchmark Metrics
 
@@ -232,18 +237,22 @@ README's results section:
 
 ## 10. Phased Build Checklist
 
-- [x] **Phase 0** — Dataset built (`data/titanic.psv`, 1,309 rows, verified)
-- [ ] **Phase 1** — Direct addressing baseline: `id` key, capacity fixed at
-      1309, confirm zero collisions. *(current step — in progress)*
-- [ ] **Phase 2** — Separate chaining + first string hash functions
-      (sum-of-chars, djb2, FNV-1a), keyed by `name`
+- [x] **Phase 0** — Dataset built (`data/hotel_california.psv`, 1,000 rows)
+- [x] **Phase 1** — Direct addressing: `guest_number` key, capacity 1000,
+      zero collisions. Loads full dataset from file, insert/lookup tested (TDD).
+- [ ] **Phase 1.5** — Naive modulo hashmap (`guest_number % capacity`, one
+      guest/slot, overwrites on collision). The "broken baseline": load guests,
+      check in guest 1001 → collides with guest 1 → data loss shown. Motivates
+      chaining. *(current step)*
+- [ ] **Phase 2** — Separate chaining (linked list per bucket, `malloc`/`free`)
+      + first string hash functions (sum-of-chars, djb2, FNV-1a), keyed by `name`
 - [ ] **Phase 3** — Open addressing (linear probing, double hashing) +
       multiplicative/Fibonacci numeric hashing
 - [ ] **Phase 4** — Dynamic resizing layered onto chaining and/or double hashing
-- [ ] **Phase 5** — Multimap keyed by `ticket`/surname, reusing chaining's
-      bucket-list structure
-- [ ] **Phase 6** — CLI wiring: two entry-point modes, visual rendering,
-      leaderboard, single-passenger query mode
+- [ ] **Phase 5** — Multimap keyed by surname (parsed from `name`), reusing
+      chaining's bucket-list structure
+- [ ] **Phase 6** — CLI wiring: run the full (hashmap × hash-function) matrix
+      and print a plain spec-sheet table (§8). No visuals/lesson flow.
 - [ ] **Phase 7** — README write-up: vocabulary, diagrams, and real benchmark
       numbers pulled from an actual run (not invented)
 - [ ] **Phase 8 (optional stretch)** — Robin Hood/Cuckoo hashing, Murmur3/
@@ -253,13 +262,15 @@ README's results section:
 
 Recorded so future-us remembers *why*, not just *that*:
 
-- **Crew records** — every legitimate structured dataset (OpenML, Vanderbilt)
-  explicitly excludes crew. Encyclopedia Titanica has crew bios but only as
-  ~890 individual pages behind Cloudflare bot-protection — a separate
-  scraping project, not a data-sourcing task.
-- **Non-boarding "phantom" passengers** — real (50+ authenticated
-  cancellations: J.P. Morgan, George Vanderbilt, Milton Hershey), but exists
-  only as narrative prose on a bot-walled page, not structured data.
+- **Titanic dataset (earlier direction, abandoned)** — was real, verified, and
+  emotionally compelling, but insert-only: nobody ever "leaves" the Titanic, so
+  it can't motivate deletion, tombstones, or grow/shrink resizing. Pivoted to the
+  synthetic Hotel California so check-in/check-out gives those operations a
+  natural home.
+- **Credit-card numbers as a column (rejected)** — would have given the sparse
+  large-key-space we wanted, but a `name|card_number` file in a public repo
+  looks like a breach dump (bad for a portfolio repo, could trip secret
+  scanning). Used `phone` instead — same sparse-key property, no baggage.
 - **JSON data format** — would require a real parser (or a dependency) before
   any hashmap code exists; deferred in favor of pipe-delimited text.
 - **Full interactive web sandbox** (drag-and-drop hash function / dataset /
