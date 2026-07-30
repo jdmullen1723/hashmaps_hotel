@@ -1,7 +1,7 @@
 #include <assert.h> //Import from compiler library for assert function
 #include <stdio.h> //Import from compiler library --> allows for printf function
 #include <string.h> //Import that allows strmcp or "string compare"
-#include "../src/direct_addressing.h" //Import from elsewhere in this repo, imports "direct_addressing.h"
+#include "hashmaps/direct_addressing.h" //Import from elsewhere in this repo, imports "direct_addressing.h"
 
 int main(void) {
     //First paragraph calls insert_guest then runs tests to see if it was actually inserted

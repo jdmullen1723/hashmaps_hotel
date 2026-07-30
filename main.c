@@ -1,6 +1,6 @@
 #include <stdio.h> //For printf command
 #include <string.h>
-#include "src/direct_addressing.h"
+#include "hashmaps/direct_addressing.h"
 #include <stdlib.h>
 
 int main(void) {
